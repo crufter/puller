@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	log "github.com/cihub/seelog"
 	docker "github.com/fsouza/go-dockerclient"
 	"gopkg.in/yaml.v2"
@@ -42,6 +43,32 @@ type Service struct {
 	Tag  string // ie. b3735a6bac3f17592d8344ac708ba1df4fcbd358, latest etc
 }
 
+func (a Service) Differs(b Service) bool {
+	switch {
+	case a.Bash != b.Bash:
+		return true
+	case a.Repo != b.Repo:
+		return true
+	case b.Tag != b.Tag:
+		return true
+	}
+	return false
+}
+
+func (s Service) Valid() error {
+	switch {
+	case !strings.Contains(s.Bash, s.Repo):
+		return errors.New("Service bash command does not contain repo")
+	}
+	return nil
+}
+
+// GenerateBash returns the final
+func (s Service) GenerateBash() []string {
+	bashParts := strings.Split(s.Bash, " ")
+	return append([]string{bashParts[0]}, append([]string{"--name", s.Name}, bashParts[1:]...)...)
+}
+
 var (
 	Services       map[string]Service
 	serviceChanged map[string]bool
@@ -80,13 +107,17 @@ func load() error {
 			log.Warnf("Service config file has unknown suffix: %v", fname)
 			continue
 		}
+		if err := service.Valid(); err != nil {
+			log.Warnf("Service %v failed validation: %v", service.Name, err)
+			continue
+		}
 		s, ok := Services[service.Name]
 		if !ok {
 			Services[service.Name] = service
 			continue
 		}
-		if s.Different(service) {
-			changed[service.Name] = true
+		if s.Differs(service) {
+			serviceChanged[service.Name] = true
 		}
 	}
 	return nil
@@ -135,8 +166,8 @@ func launch() error {
 			continue
 		}
 		log.Infof("Spinning up container with name %v, service %v", name, service)
-		bashParts := strings.Split(service.Bash, " ")
-		outp, err := exec.Command(bashParts[0], "--name", service.Name, bashParts[1:]...).Output()
+		bash := service.GenerateBash()
+		outp, err := exec.Command(bash[0], bash[1:]...).Output()
 		if err != nil {
 			log.Warnf("Command for service %v failed with output %v and error: %v", name, string(outp), err)
 		}
