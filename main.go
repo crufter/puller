@@ -18,6 +18,7 @@ const (
 )
 
 func main() {
+	log.Infof("Started daemon")
 	first := true
 	for {
 		if !first {
@@ -66,18 +67,16 @@ func (s Service) Valid() error {
 // GenerateBash returns the final
 func (s Service) GenerateBash() []string {
 	bashParts := strings.Split(s.Bash, " ")
-	return append([]string{bashParts[0]}, append([]string{"--name", s.Name}, bashParts[1:]...)...)
+	return append([]string{bashParts[0], bashParts[1]}, append([]string{"--name", s.Name, "-d"}, bashParts[2:]...)...)
 }
 
 var (
-	Services       map[string]Service
-	serviceChanged map[string]bool
+	Services        = map[string]Service{}
+	serviceChanged  = map[string]bool{}
+	badServiceFiles = map[string]bool{}
 )
 
 func load() error {
-	if Services == nil {
-		Services = map[string]Service{}
-	}
 	finfos, err := ioutil.ReadDir(dir)
 	if err != nil {
 		return err
@@ -104,7 +103,11 @@ func load() error {
 				continue
 			}
 		default:
-			log.Warnf("Service config file has unknown suffix: %v", fname)
+			_, ok := badServiceFiles[fname]
+			if !ok {
+				log.Warnf("Service config file has unknown suffix: %v", fname)
+				badServiceFiles[fname] = true
+			}
 			continue
 		}
 		if err := service.Valid(); err != nil {
@@ -165,12 +168,13 @@ func launch() error {
 		if containerExists {
 			continue
 		}
-		log.Infof("Spinning up container with name %v, service %v", name, service)
 		bash := service.GenerateBash()
+		log.Infof("Spinning up container with name %v with bash %v, service %v", name, bash, service)
 		outp, err := exec.Command(bash[0], bash[1:]...).Output()
 		if err != nil {
 			log.Warnf("Command for service %v failed with output %v and error: %v", name, string(outp), err)
 		}
+		log.Infof("Done spinning up %v", name)
 	}
 	return nil
 }
