@@ -5,6 +5,7 @@ import (
 	//"encoding/json"
 	"fmt"
 	log "github.com/cihub/seelog"
+	"github.com/crufter/pauler/daemon/api"
 	"github.com/crufter/pauler/shared"
 	"github.com/crufter/pauler/types"
 	docker "github.com/fsouza/go-dockerclient"
@@ -20,12 +21,6 @@ import (
 	"time"
 )
 
-var (
-	Services        = map[string]types.Service{}
-	serviceChanged  = map[string]bool{}
-	badServiceFiles = map[string]bool{}
-)
-
 func Start() error {
 	log.Infof("Started daemon")
 	first := true
@@ -37,7 +32,7 @@ func Start() error {
 		shared.Node = &hostname
 	}
 	conf := memberlist.DefaultLocalConfig()
-	conf.BindPort = *shared.InternalPort
+	conf.BindPort = *shared.Port
 	conf.Name = *shared.Node
 	list, err := memberlist.Create(conf)
 	if err != nil {
@@ -51,9 +46,7 @@ func Start() error {
 		}
 	}
 	go func() {
-		http.HandleFunc("/v1/service", putService)
-		log.Info("Starting http server")
-		log.Critical(http.ListenAndServe(fmt.Sprintf(":%v", *shared.HttpPort), nil))
+		api.Start()
 	}()
 	for {
 		if !first {
@@ -73,23 +66,6 @@ func Start() error {
 			continue
 		}
 	}
-}
-
-func putService(w http.ResponseWriter, r *http.Request) {
-	log.Info("Putting service")
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		panic(err)
-	}
-	s := &types.Service{}
-	if err := s.Unmarshal(body); err != nil {
-		panic(err)
-	}
-	bs, err := yaml.Marshal(s)
-	if err != nil {
-		panic(err)
-	}
-	ioutil.WriteFile(*shared.Dir+"/"+s.Name+".yml", bs, os.FileMode(0777))
 }
 
 func load() error {
@@ -119,10 +95,10 @@ func load() error {
 				continue
 			}
 		default:
-			_, ok := badServiceFiles[fname]
+			_, ok := shared.BadServiceFiles[fname]
 			if !ok {
 				log.Warnf("Service config file has unknown suffix: %v", fname)
-				badServiceFiles[fname] = true
+				shared.BadServiceFiles[fname] = true
 			}
 			continue
 		}
@@ -134,7 +110,7 @@ func load() error {
 		if !matchesNode(service) {
 			continue
 		}
-		Services[service.Name] = service
+		shared.Services[service.Name] = service
 	}
 	return nil
 }
@@ -170,10 +146,19 @@ func launch() error {
 	containers, err := dclient.ListContainers(docker.ListContainersOptions{
 		All: true,
 	})
+	images, err := dclient.ListImages(docker.ListImagesOptions{
+		All: true,
+	})
+	imageIndex := map[string]docker.APIImages{}
+	for _, image := range images {
+		for _, repoTag := range image.RepoTags {
+			imageIndex[repoTag] = image
+		}
+	}
 	if err != nil {
 		return err
 	}
-	for name, service := range Services {
+	for name, service := range shared.Services {
 		containerExists := false
 		var cont docker.APIContainers
 		for _, container := range containers {
@@ -184,8 +169,17 @@ func launch() error {
 				}
 			}
 		}
-		if containerExists && cont.Labels["sum"] != service.Sum() {
-			serviceChanged[service.Name] = true
+		if containerExists {
+			if cont.Labels["sum"] != service.Sum() {
+				shared.ServiceChanged[service.Name] = true
+			}
+			img, foundImage := imageIndex[service.Repo+":"+service.Tag]
+			if !foundImage {
+				log.Warnf("Can't find image %v for running container %v %v", cont.Image, service.Name)
+			} else if containerExists && img.Created > cont.Created {
+				log.Infof("Image for %v is fresher %v %v", service.Name, img.Created, cont.Created)
+				shared.ServiceOutdated[service.Name] = true
+			}
 		}
 		if containerExists {
 			continue
@@ -207,7 +201,20 @@ func remove(list *memberlist.Memberlist) error {
 	if err != nil {
 		return err
 	}
-	for serviceName, _ := range serviceChanged {
+	for serviceName, _ := range shared.ServiceOutdated {
+		log.Infof("Removing container for service %v because it has fresher image", serviceName)
+		// Redundant removal here, see ServiceChanged loop
+		err = dclient.RemoveContainer(docker.RemoveContainerOptions{
+			ID:    serviceName,
+			Force: true,
+		})
+		if err != nil {
+			log.Warnf("Failed to remove service %v: %v", serviceName, err)
+			continue
+		}
+		delete(shared.ServiceOutdated, serviceName)
+	}
+	for serviceName, _ := range shared.ServiceChanged {
 		log.Infof("Removing container for service %v because it has changed", serviceName)
 		err = dclient.RemoveContainer(docker.RemoveContainerOptions{
 			ID:    serviceName,
@@ -217,21 +224,29 @@ func remove(list *memberlist.Memberlist) error {
 			log.Warnf("Failed to remove service %v: %v", serviceName, err)
 			continue
 		}
+		service := shared.Services[serviceName]
+		if service.Origin != "" && service.Origin != *shared.Node { // Do not propagate change service definition coming from an other node
+			continue
+		}
 		var err2 error
 		members := []*memberlist.Node{}
+		log.Info(list.Members())
 		for _, member := range list.Members() {
+			log.Info(member.Name, *shared.Node)
 			if member.Name == *shared.Node {
+				log.Info("Skipping")
 				continue
 			}
 			members = append(members, member)
 		}
+		service.Origin = *shared.Node // set the origin to this node so receiving service will know to not propagate this change
 		log.Infof("Broadcasting service change of %v to %v nodes", serviceName, len(members))
 		for _, member := range members {
-			bs, err2 := Services[serviceName].Marshal()
+			bs, err2 := service.Marshal()
 			if err2 != nil {
 				panic(err2)
 			}
-			req, err2 := http.NewRequest("PUT", fmt.Sprintf("http://%v:%v/v1/service", member.Addr.String(), *shared.HttpPort), bytes.NewReader(bs))
+			req, err2 := http.NewRequest("PUT", fmt.Sprintf("http://%v:%v/v1/service", member.Addr.String(), member.Port+1), bytes.NewReader(bs))
 			if err2 != nil {
 				log.Warn(err)
 				continue
@@ -247,7 +262,7 @@ func remove(list *memberlist.Memberlist) error {
 			}
 		}
 		if err == nil && err2 == nil {
-			delete(serviceChanged, serviceName)
+			delete(shared.ServiceChanged, serviceName)
 		}
 	}
 	return nil
