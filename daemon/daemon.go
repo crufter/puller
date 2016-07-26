@@ -109,12 +109,13 @@ func load() error {
 			continue
 		}
 		service.LastUpdated = finfo.ModTime()
-		if err := service.Valid(); err != nil {
-			log.Warnf("Service %v failed validation: %v", service.Name, err)
+		fbase := strings.Split(fname, ".")[0]
+		if fbase != service.Name {
+			log.Warnf("Service %v failed validation: file name (%v) and service name (%v) differs", service.Name, fbase, service.Name)
 			continue
 		}
-		// we do not care about any service definition not matching this node
-		if !matchesNode(service) {
+		if err := service.Valid(); err != nil {
+			log.Warnf("Service %v failed validation: %v", service.Name, err)
 			continue
 		}
 		shared.Services[service.Name] = service
@@ -166,6 +167,9 @@ func launch() error {
 		return err
 	}
 	for name, service := range shared.Services {
+		if !matchesNode(service) {
+			continue
+		}
 		containerExists := false
 		var cont docker.APIContainers
 		for _, container := range containers {

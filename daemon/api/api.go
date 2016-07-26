@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	log "github.com/cihub/seelog"
 	"github.com/crufter/pauler/shared"
@@ -23,16 +24,39 @@ func putService(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		panic(err)
 	}
-	s := &types.Service{}
-	if err := s.Unmarshal(body); err != nil {
-		panic(err)
-	}
-	bs, err := yaml.Marshal(s)
+	b64encoded := []string{}
+	err = json.Unmarshal(body, &b64encoded)
 	if err != nil {
 		panic(err)
 	}
-	err = ioutil.WriteFile(*shared.Dir+"/"+s.Name+".yml", bs, os.FileMode(0777))
+	ss := []types.Service{}
+	for _, v := range b64encoded {
+		s := &types.Service{}
+		if err := s.Unmarshal([]byte(v)); err != nil {
+			panic(err)
+		}
+		ss = append(ss, *s)
+	}
+	err = updateFresherServices(ss)
 	if err != nil {
 		panic(err)
 	}
+}
+
+func updateFresherServices(services []types.Service) error {
+	for _, v := range services {
+		current, ok := shared.Services[v.Name]
+		if !ok || (v.Sum() != current.Sum() && v.LastUpdated.After(current.LastUpdated)) {
+			log.Infof("Writing file for %v, new: %v", v.Name, !ok)
+			bs, err := yaml.Marshal(v)
+			if err != nil {
+				panic(err)
+			}
+			err = ioutil.WriteFile(*shared.Dir+"/"+v.Name+".yml", bs, os.FileMode(0777))
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+	return nil
 }
