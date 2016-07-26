@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
 
 type Service struct {
@@ -17,7 +18,8 @@ type Service struct {
 	Tag  string // ie. b3735a6bac3f17592d8344ac708ba1df4fcbd358, latest etc
 	Node string // regexp on nodename to see if service should be deployed on a given instance, ie "database-box-*" should match "database-box-lvje" but not "api-box-ooek"
 	// Fields not factoring into comparison with running containers
-	Origin string // the node name of the box this service was last updated on
+	LastUpdated time.Time // the time the service definition file was last updated
+	PullEvery   int64     // pull time in seconds
 }
 
 func (s Service) Valid() error {

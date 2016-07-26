@@ -3,6 +3,7 @@ package daemon
 import (
 	"bytes"
 	//"encoding/json"
+	"encoding/json"
 	"errors"
 	"fmt"
 	log "github.com/cihub/seelog"
@@ -17,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -58,13 +60,16 @@ func Start() error {
 			log.Warnf("Failed to load service definitions: %v", err)
 			continue
 		}
+		if err := remove(list); err != nil {
+			log.Warnf("Failed to remove services: %v", err)
+			continue
+		}
 		if err := launch(); err != nil {
 			log.Warnf("Failed to launch services: %v", err)
 			continue
 		}
-		if err := remove(list); err != nil {
-			log.Warnf("Failed to remove services: %v", err)
-			continue
+		if err := propagate(list.Members()); err != nil {
+			log.Warnf("Faiked to propagate services: %v", err)
 		}
 	}
 }
@@ -103,6 +108,7 @@ func load() error {
 			}
 			continue
 		}
+		service.LastUpdated = finfo.ModTime()
 		if err := service.Valid(); err != nil {
 			log.Warnf("Service %v failed validation: %v", service.Name, err)
 			continue
@@ -198,65 +204,99 @@ func launch() error {
 
 // changed services
 func remove(list *memberlist.Memberlist) error {
-	dclient, err := getDockerClient()
-	if err != nil {
-		return err
-	}
 	for serviceName, _ := range shared.ServiceOutdated {
 		log.Infof("Removing container for service %v because it has fresher image", serviceName)
-		// Redundant removal here, see ServiceChanged loop
-		err = dclient.RemoveContainer(docker.RemoveContainerOptions{
-			ID:    serviceName,
-			Force: true,
-		})
-		if err != nil {
-			log.Warnf("Failed to remove service %v: %v", serviceName, err)
-			continue
+		if err := removeServiceContainer(serviceName); err != nil {
+			delete(shared.ServiceOutdated, serviceName)
 		}
-		delete(shared.ServiceOutdated, serviceName)
 	}
 	for serviceName, _ := range shared.ServiceChanged {
 		log.Infof("Removing container for service %v because it has changed", serviceName)
-		err = dclient.RemoveContainer(docker.RemoveContainerOptions{
-			ID:    serviceName,
-			Force: true,
-		})
-		if err != nil {
-			log.Warnf("Failed to remove service %v: %v", serviceName, err)
-			continue
-		}
-		service := shared.Services[serviceName]
-		if service.Origin != "" && service.Origin != *shared.Node { // Do not propagate change service definition coming from an other node
-			continue
-		}
-		var err2 error
-		members := []*memberlist.Node{}
-		log.Info(list.Members())
-		for _, member := range list.Members() {
-			log.Info(member.Name, *shared.Node)
-			if member.Name == *shared.Node {
-				log.Info("Skipping")
-				continue
-			}
-			members = append(members, member)
-		}
-		service.Origin = *shared.Node // set the origin to this node so receiving service will know to not propagate this change
-		log.Infof("Broadcasting service change of %v to %v nodes", serviceName, len(members))
-		for _, member := range members {
-			if err := transferService(service, member); err != nil {
-				log.Warn(err)
-			}
-		}
-		if err == nil && err2 == nil {
+		if err := removeServiceContainer(serviceName); err == nil {
 			delete(shared.ServiceChanged, serviceName)
 		}
 	}
 	return nil
 }
 
+func removeServiceContainer(serviceName string) error {
+	dclient, err := getDockerClient()
+	if err != nil {
+		return err
+	}
+	return dclient.RemoveContainer(docker.RemoveContainerOptions{
+		ID:    serviceName,
+		Force: true,
+	})
+}
+
+func propagate(members []*memberlist.Node) error {
+	services := []types.Service{}
+	for _, v := range shared.Services {
+		services = append(services, v)
+	}
+	for _, m := range pick2(*shared.Node, members) {
+		err := transferServices(services, m)
+		if err != nil {
+			log.Warn(err)
+		}
+	}
+	return nil
+}
+
+// pick at most 2 buddies from a list of members.
+// operates under the assumption that the current node is amongs the members
+func pick2(nodeName string, members []*memberlist.Node) []*memberlist.Node {
+	l := len(members)
+	switch {
+	case l <= 1:
+		return []*memberlist.Node{}
+	case l <= 3:
+		return others(nodeName, members)
+	}
+	pool := append(append([]*memberlist.Node{}, members...), members...)
+	sort.Sort(Members(pool))
+	for i, m := range members {
+		if m.Name == nodeName {
+			return []*memberlist.Node{pool[i+1], pool[i+2]}
+		}
+	}
+	panic("Bug in code")
+}
+
+func others(nodeName string, members []*memberlist.Node) []*memberlist.Node {
+	ret := []*memberlist.Node{}
+	for _, v := range members {
+		if v.Name != nodeName {
+			ret = append(ret, v)
+		}
+	}
+	return ret
+}
+
+type Members []*memberlist.Node
+
+func (s Members) Len() int {
+	return len(s)
+}
+func (s Members) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+func (s Members) Less(i, j int) bool {
+	return strings.Compare(s[i].Name, s[j].Name) <= 0
+}
+
 // transferService propagates a service definition change
-func transferService(service types.Service, member *memberlist.Node) error {
-	bs, err := service.Marshal()
+func transferServices(services []types.Service, member *memberlist.Node) error {
+	load := []string{}
+	for _, v := range services {
+		bs, err := v.Marshal()
+		if err != nil {
+			return err
+		}
+		load = append(load, string(bs))
+	}
+	bs, err := json.Marshal(load)
 	if err != nil {
 		return err
 	}
