@@ -3,6 +3,7 @@ package daemon
 import (
 	"bytes"
 	//"encoding/json"
+	"errors"
 	"fmt"
 	log "github.com/cihub/seelog"
 	"github.com/crufter/pauler/daemon/api"
@@ -242,23 +243,8 @@ func remove(list *memberlist.Memberlist) error {
 		service.Origin = *shared.Node // set the origin to this node so receiving service will know to not propagate this change
 		log.Infof("Broadcasting service change of %v to %v nodes", serviceName, len(members))
 		for _, member := range members {
-			bs, err2 := service.Marshal()
-			if err2 != nil {
-				panic(err2)
-			}
-			req, err2 := http.NewRequest("PUT", fmt.Sprintf("http://%v:%v/v1/service", member.Addr.String(), member.Port+1), bytes.NewReader(bs))
-			if err2 != nil {
+			if err := transferService(service, member); err != nil {
 				log.Warn(err)
-				continue
-			}
-			rsp, err2 := http.DefaultClient.Do(req)
-			if err2 != nil {
-				log.Warnf("Failed to broadcast service change to node %v: %v", member, err2)
-				continue
-			}
-			if rsp.StatusCode != 200 {
-				log.Warnf("Response status code is not 200 when talking to node %v", member)
-				continue
 			}
 		}
 		if err == nil && err2 == nil {
@@ -266,4 +252,24 @@ func remove(list *memberlist.Memberlist) error {
 		}
 	}
 	return nil
+}
+
+// transferService propagates a service definition change
+func transferService(service types.Service, member *memberlist.Node) error {
+	bs, err := service.Marshal()
+	if err != nil {
+		return err
+	}
+	req, err2 := http.NewRequest("PUT", fmt.Sprintf("http://%v:%v/v1/service", member.Addr.String(), member.Port+1), bytes.NewReader(bs))
+	if err2 != nil {
+		return err
+	}
+	rsp, err := http.DefaultClient.Do(req)
+	if err2 != nil {
+		return errors.New(fmt.Sprintf("Failed to broadcast service change to node %v: %v", member, err2))
+	}
+	if rsp.StatusCode != 200 {
+		return errors.New(fmt.Sprintf("Response status code is not 200 when talking to node %v", member))
+	}
+	return err
 }
