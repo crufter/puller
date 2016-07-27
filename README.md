@@ -32,10 +32,10 @@ puller -d -node="box-1" -dir=/dirpath
 
 Voila! Puller will make sure your service will be deployed on your local machine!
 
-Getting a feel for a multi node setup locally
+Getting a feel for a multi node setup
 =====
 
-You can play around a multinode setup by launching more instances:
+You can play around with a multinode setup locally by launching more instances and using different dirs for the service definitions:
 
 ```
 puller -d -join=127.0.0.1:7946 -port=7710 -dir=/dirpath2 -node="xob-2"
