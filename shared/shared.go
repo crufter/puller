@@ -2,7 +2,7 @@ package shared
 
 import (
 	"flag"
-	"github.com/crufter/pauler/types"
+	cmap "github.com/streamrail/concurrent-map"
 )
 
 var (
@@ -14,8 +14,8 @@ var (
 )
 
 var (
-	Services        = map[string]types.Service{}
-	ServiceChanged  = map[string]bool{} // service definition has changed.
-	ServiceOutdated = map[string]bool{} // service was launched with an image that's older than the current one locally
-	BadServiceFiles = map[string]bool{}
+	Services         = cmap.New() // map[string]types.Service
+	ChangedServices  = cmap.New() // map[string]bool - service definition has changed.
+	OutdatedServices = cmap.New() // map[string]bool - service was launched with an image that's older than the current one locally
+	BadServiceFiles  = cmap.New() // map[string]bool - bad service files
 )

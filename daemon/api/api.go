@@ -19,7 +19,7 @@ func Start() {
 }
 
 func putService(w http.ResponseWriter, r *http.Request) {
-	log.Info("Putting service")
+	log.Debug("Putting service")
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		panic(err)
@@ -45,8 +45,8 @@ func putService(w http.ResponseWriter, r *http.Request) {
 
 func updateFresherServices(services []types.Service) error {
 	for _, v := range services {
-		current, ok := shared.Services[v.Name]
-		if !ok || (v.Sum() != current.Sum() && v.LastUpdated.After(current.LastUpdated)) {
+		current, ok := shared.Services.Get(v.Name)
+		if !ok || (v.Sum() != current.(types.Service).Sum() && v.LastUpdated.After(current.(types.Service).LastUpdated)) {
 			log.Infof("Writing file for %v, new: %v", v.Name, !ok)
 			bs, err := yaml.Marshal(v)
 			if err != nil {

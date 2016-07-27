@@ -34,7 +34,7 @@ func Start() error {
 		}
 		shared.Node = &hostname
 	}
-	conf := memberlist.DefaultLocalConfig()
+	conf := memberlist.DefaultLANConfig()
 	conf.BindPort = *shared.Port
 	conf.Name = *shared.Node
 	list, err := memberlist.Create(conf)
@@ -101,10 +101,10 @@ func load() error {
 				continue
 			}
 		default:
-			_, ok := shared.BadServiceFiles[fname]
+			_, ok := shared.BadServiceFiles.Get(fname)
 			if !ok {
 				log.Warnf("Service config file has unknown suffix: %v", fname)
-				shared.BadServiceFiles[fname] = true
+				shared.BadServiceFiles.Set(fname, true)
 			}
 			continue
 		}
@@ -118,7 +118,7 @@ func load() error {
 			log.Warnf("Service %v failed validation: %v", service.Name, err)
 			continue
 		}
-		shared.Services[service.Name] = service
+		shared.Services.Set(service.Name, service)
 	}
 	return nil
 }
@@ -166,7 +166,8 @@ func launch() error {
 	if err != nil {
 		return err
 	}
-	for name, service := range shared.Services {
+	for name, s := range shared.Services.Items() {
+		service := s.(types.Service)
 		if !matchesNode(service) {
 			continue
 		}
@@ -182,14 +183,14 @@ func launch() error {
 		}
 		if containerExists {
 			if cont.Labels["sum"] != service.Sum() {
-				shared.ServiceChanged[service.Name] = true
+				shared.ChangedServices.Set(service.Name, true)
 			}
 			img, foundImage := imageIndex[service.Repo+":"+service.Tag]
 			if !foundImage {
 				log.Warnf("Can't find image %v for running container %v %v", cont.Image, service.Name)
 			} else if containerExists && img.Created > cont.Created {
 				log.Infof("Image for %v is fresher %v %v", service.Name, img.Created, cont.Created)
-				shared.ServiceOutdated[service.Name] = true
+				shared.OutdatedServices.Set(service.Name, true)
 			}
 		}
 		if containerExists {
@@ -208,16 +209,16 @@ func launch() error {
 
 // changed services
 func remove(list *memberlist.Memberlist) error {
-	for serviceName, _ := range shared.ServiceOutdated {
+	for _, serviceName := range shared.OutdatedServices.Keys() {
 		log.Infof("Removing container for service %v because it has fresher image", serviceName)
 		if err := removeServiceContainer(serviceName); err != nil {
-			delete(shared.ServiceOutdated, serviceName)
+			shared.OutdatedServices.Remove(serviceName)
 		}
 	}
-	for serviceName, _ := range shared.ServiceChanged {
+	for _, serviceName := range shared.ChangedServices.Keys() {
 		log.Infof("Removing container for service %v because it has changed", serviceName)
 		if err := removeServiceContainer(serviceName); err == nil {
-			delete(shared.ServiceChanged, serviceName)
+			shared.ChangedServices.Remove(serviceName)
 		}
 	}
 	return nil
@@ -236,8 +237,8 @@ func removeServiceContainer(serviceName string) error {
 
 func propagate(members []*memberlist.Node) error {
 	services := []types.Service{}
-	for _, v := range shared.Services {
-		services = append(services, v)
+	for _, v := range shared.Services.Items() {
+		services = append(services, v.(types.Service))
 	}
 	for _, m := range pick2(*shared.Node, members) {
 		err := transferServices(services, m)
@@ -304,13 +305,13 @@ func transferServices(services []types.Service, member *memberlist.Node) error {
 	if err != nil {
 		return err
 	}
-	req, err2 := http.NewRequest("PUT", fmt.Sprintf("http://%v:%v/v1/service", member.Addr.String(), member.Port+1), bytes.NewReader(bs))
-	if err2 != nil {
+	req, err := http.NewRequest("PUT", fmt.Sprintf("http://%v:%v/v1/service", member.Addr.String(), member.Port+1), bytes.NewReader(bs))
+	if err != nil {
 		return err
 	}
 	rsp, err := http.DefaultClient.Do(req)
-	if err2 != nil {
-		return errors.New(fmt.Sprintf("Failed to broadcast service change to node %v: %v", member, err2))
+	if err != nil {
+		return errors.New(fmt.Sprintf("Failed to broadcast service change to node %v: %v", member, err))
 	}
 	if rsp.StatusCode != 200 {
 		return errors.New(fmt.Sprintf("Response status code is not 200 when talking to node %v", member))
