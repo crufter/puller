@@ -3,9 +3,9 @@ package main
 import (
 	"flag"
 	log "github.com/cihub/seelog"
-	"github.com/crufter/pauler/client"
-	"github.com/crufter/pauler/daemon"
-	"github.com/crufter/pauler/shared"
+	"github.com/crufter/puller/client"
+	"github.com/crufter/puller/daemon"
+	"github.com/crufter/puller/shared"
 )
 
 func main() {

@@ -6,7 +6,7 @@ import (
 )
 
 var (
-	Dir  = flag.String("dir", "/etc/pauler", "The dir to load service configs from")
+	Dir  = flag.String("dir", "/etc/puller", "The dir to load service configs from")
 	D    = flag.Bool("d", false, "Run as a daemon")
 	Join = flag.String("join", "", "Join a cluster")
 	Port = flag.Int("port", 7946, "Port is a port used for internal communication. Port + 1 is the port number of the http server")
