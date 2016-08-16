@@ -53,12 +53,15 @@ func Start() error {
 	}()
 	for {
 		if !first {
-			time.Sleep(1 * time.Second)
+			time.Sleep(10 * time.Second)
 		}
 		first = false
 		if err := load(); err != nil {
 			log.Warnf("Failed to load service definitions: %v", err)
 			continue
+		}
+		if err := pull(); err != nil {
+			log.Warnf("Failed to pull images: %v", err)
 		}
 		if err := remove(list); err != nil {
 			log.Warnf("Failed to remove services: %v", err)
@@ -144,6 +147,27 @@ func getDockerClient() (*docker.Client, error) {
 
 func matchesNode(service types.Service) bool {
 	return *shared.Node != "" && regexp.MustCompile(service.Node).Match([]byte(*shared.Node))
+}
+
+func pull() error {
+	for _, s := range shared.Services.Items() {
+		service := s.(types.Service)
+		cmd := ""
+		args := []string{}
+		if strings.Contains(service.Repo, "gcr.io") {
+			cmd = "gcloud"
+			args = []string{"docker", "pull", service.Repo + ":" + service.Tag}
+		} else {
+			cmd = "docker"
+			args = []string{"pull", service.Repo + ":" + service.Tag}
+		}
+		log.Infof("Pulling %v %v", cmd, args)
+		output, err := exec.Command(cmd, args...).Output()
+		if err != nil {
+			log.Errorf("Pulling failed: %v: %v", string(output), err)
+		}
+	}
+	return nil
 }
 
 func launch() error {

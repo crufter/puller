@@ -1,7 +1,7 @@
 package types
 
 import (
-	hash "crypto/sha256"
+	hash "crypto/sha1"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -32,12 +32,22 @@ func (s Service) Valid() error {
 
 func (s Service) Sum() string {
 	// even the Node regexp is taken into account to ensure potential removal from the box
-	return fmt.Sprintf("%x", hash.New().Sum([]byte(s.Bash+s.Repo+s.Tag+s.Node)))
+	return fmt.Sprintf("%x", hash.Sum([]byte(s.Bash+s.Repo+s.Tag+s.Node)))
 }
 
 // GenerateBash returns the final
 func (s Service) GenerateBash() []string {
 	bashParts := strings.Split(s.Bash, " ")
+	for i, v := range bashParts {
+		if !strings.Contains(v, s.Repo) {
+			continue
+		}
+		if strings.Contains(v, ":") {
+			bashParts[i] = strings.Split(v, ":")[0] + ":" + s.Tag
+		} else {
+			bashParts[i] += ":" + s.Tag
+		}
+	}
 	return append([]string{bashParts[0], bashParts[1]}, append([]string{"--name", s.Name, "-d", "--label", "sum=" + s.Sum()}, bashParts[2:]...)...)
 }
 
