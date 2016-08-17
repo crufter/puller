@@ -19,7 +19,6 @@ func Start() {
 }
 
 func putService(w http.ResponseWriter, r *http.Request) {
-	log.Debug("Putting service")
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		panic(err)
@@ -37,6 +36,7 @@ func putService(w http.ResponseWriter, r *http.Request) {
 		}
 		ss = append(ss, *s)
 	}
+	log.Debugf("Putting services %v", ss)
 	err = updateFresherServices(ss)
 	if err != nil {
 		panic(err)

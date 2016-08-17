@@ -206,13 +206,15 @@ func launch() error {
 			}
 		}
 		if containerExists {
+			img, foundImage := imageIndex[service.Repo+":"+service.Tag]
+			if !foundImage {
+				log.Warnf("Can't find image %v for service %v", service.Repo+":"+service.Tag, service.Name)
+				continue
+			}
 			if cont.Labels["sum"] != service.Sum() {
 				shared.ChangedServices.Set(service.Name, true)
 			}
-			img, foundImage := imageIndex[service.Repo+":"+service.Tag]
-			if !foundImage {
-				log.Warnf("Can't find image %v for running container %v %v", cont.Image, service.Name)
-			} else if containerExists && img.Created > cont.Created {
+			if containerExists && img.Created > cont.Created {
 				log.Infof("Image for %v is fresher %v %v", service.Name, img.Created, cont.Created)
 				shared.OutdatedServices.Set(service.Name, true)
 			}
