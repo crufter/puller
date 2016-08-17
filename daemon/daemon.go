@@ -97,7 +97,7 @@ func load() error {
 		//		log.Warnf("Can't read %v: %v", fname, err)
 		//		continue
 		//	}
-		case strings.HasSuffix(fname, "yaml") || strings.HasSuffix(fname, "yml"):
+		case strings.HasSuffix(fname, "yml"):
 			err = yaml.Unmarshal(fcontents, &service)
 			if err != nil {
 				log.Warnf("Can't read %v: %v", fname, err)
