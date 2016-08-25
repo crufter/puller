@@ -20,7 +20,7 @@ func Start() {
 	r.GET("/v1/services/:name", getService)
 	//r.GET("/v1/members", getMembers)
 	log.Info("Starting http server")
-	log.Critical(http.ListenAndServe(fmt.Sprintf(":%v", *shared.Port+1), nil))
+	log.Critical(http.ListenAndServe(fmt.Sprintf(":%v", *shared.Port+1), r))
 }
 
 func putServices(w http.ResponseWriter, r *http.Request, p httpr.Params) {

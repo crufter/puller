@@ -344,7 +344,7 @@ func transferServices(services []types.Service, member *memberlist.Node) error {
 		return errors.New(fmt.Sprintf("Failed to broadcast service change to node %v: %v", member, err))
 	}
 	if rsp.StatusCode != 200 {
-		return errors.New(fmt.Sprintf("Response status code is not 200 when talking to node %v", member))
+		return errors.New(fmt.Sprintf("Response status code is not 200 when talking to node %v, response: %v", member, rsp))
 	}
 	return err
 }
