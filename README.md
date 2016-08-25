@@ -7,8 +7,8 @@ Given you feed it some service definitions (through yaml files, http calls or cl
 
 - Pull the image from the repository, and keep it fresh
 - Deploy the service to the node if the nodename matches the regexp in the service definition
-- Watch for service configuration change and recreate the container if needed
-- If you update the service configuration on one node, the change will propagate across all nodes
+- Watch for service definition change (exposing an additional port? changing image tag? no problem, detected!) and recreate the container if needed
+- If you update the service definition on one node, the change will propagate across all nodes
 - Easily change to/roll back to a certain tag of the image
 
 First steps

@@ -161,7 +161,7 @@ func pull() error {
 			cmd = "docker"
 			args = []string{"pull", service.Repo + ":" + service.Tag}
 		}
-		log.Infof("Pulling %v %v", cmd, args)
+		log.Infof("Pulling '%v %v'", cmd, strings.Join(args, " "))
 		output, err := exec.Command(cmd, args...).Output()
 		if err != nil {
 			log.Errorf("Pulling failed: %v: %v", string(output), err)
@@ -235,17 +235,21 @@ func launch() error {
 
 // changed services
 func remove(list *memberlist.Memberlist) error {
+	f := func(serviceName string) {
+		err := removeServiceContainer(serviceName)
+		if err != nil {
+			log.Errorf("Failed to remove %v: %v", serviceName, err)
+		}
+		shared.OutdatedServices.Remove(serviceName)
+
+	}
 	for _, serviceName := range shared.OutdatedServices.Keys() {
 		log.Infof("Removing container for service %v because it has fresher image", serviceName)
-		if err := removeServiceContainer(serviceName); err != nil {
-			shared.OutdatedServices.Remove(serviceName)
-		}
+		f(serviceName)
 	}
 	for _, serviceName := range shared.ChangedServices.Keys() {
 		log.Infof("Removing container for service %v because it has changed", serviceName)
-		if err := removeServiceContainer(serviceName); err == nil {
-			shared.ChangedServices.Remove(serviceName)
-		}
+		f(serviceName)
 	}
 	return nil
 }
@@ -331,7 +335,7 @@ func transferServices(services []types.Service, member *memberlist.Node) error {
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequest("PUT", fmt.Sprintf("http://%v:%v/v1/service", member.Addr.String(), member.Port+1), bytes.NewReader(bs))
+	req, err := http.NewRequest("PUT", fmt.Sprintf("http://%v:%v/v1/services", member.Addr.String(), member.Port+1), bytes.NewReader(bs))
 	if err != nil {
 		return err
 	}
