@@ -33,7 +33,7 @@ Start the puller daemon with the following command:
 puller -d -node="box-1" -dir=/dirpath
 ```
 
-Voila! Puller will make sure your service will be deployed on your local machine and it will keep the imgage fresh. Change to tag name or any other property in this file and Puller compare, download and redeploy or remove if needed.
+Voila! Puller will make sure your service is deployed on your local machine and it will keep the image fresh. Change to tag name or any other property in this file and Puller compares, downloads and redeploys or removes as needed.
 
 (You don't have to specify the nodename with "node", if you leave it blank it will be extracted from the OS)
 
