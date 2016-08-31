@@ -66,12 +66,7 @@ puller -d  -dir=/var/puller
 /usr/bin/puller -d -dir=/var/puller -join=consul-seed
 ```
 
-Pros
-=====
-
-- It is ridiculously simple. I don't plan big features. I just want this to work and do its job. All the time.
-
-Cons
+Known shortcomings
 =====
 
 - It is single threaded currently - it first pulls, then removes/launches etc. This is not ideal in all scenarios but at least the threads don't have to be rate limited - used to run into exceeding quota with Google Cloud.
