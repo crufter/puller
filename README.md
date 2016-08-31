@@ -3,6 +3,9 @@ puller
 
 Puller is a ridiculously simple, distributed Docker container deployment and CI tool. 
 
+I created this because most things out there do way more than I want.
+Perhaps other people will find this useful.
+
 Given you feed it some service definitions (through yaml files, http calls or cli client), it will:
 
 - Pull the image from the repository, and keep it fresh (with gcloud support)
@@ -32,10 +35,13 @@ puller -d -node="box-1" -dir=/dirpath
 
 Voila! Puller will make sure your service will be deployed on your local machine and it will keep the imgage fresh. Change to tag name or any other property in this file and Puller compare, download and redeploy or remove if needed.
 
+(You don't have to specify the nodename with "node", if you leave it blank it will be extracted from the OS)
+
 Getting a feel for a multi node setup
 =====
 
 You can play around with a multinode setup locally by launching more instances and using different dirs for the service definitions:
+(The port is only specified because multiple instances running on the same host can't use the same port, obviously.)
 
 ```
 puller -d -join=127.0.0.1:7946 -port=7710 -dir=/dirpath2 -node="xob-2"
