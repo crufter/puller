@@ -53,7 +53,7 @@ func Start() error {
 	}()
 	for {
 		if !first {
-			time.Sleep(10 * time.Second)
+			time.Sleep(time.Duration(*shared.Interval) * time.Second)
 		}
 		first = false
 		if err := load(); err != nil {
