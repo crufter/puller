@@ -152,6 +152,9 @@ func matchesNode(service types.Service) bool {
 func pull() error {
 	for _, s := range shared.Services.Items() {
 		service := s.(types.Service)
+		if !matchesNode(service) {
+			continue
+		}
 		cmd := ""
 		args := []string{}
 		if strings.Contains(service.Repo, "gcr.io") {
