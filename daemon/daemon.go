@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	log "github.com/cihub/seelog"
-	"github.com/crufter/puller/daemon/api"
 	"github.com/crufter/puller/shared"
 	"github.com/crufter/puller/types"
 	docker "github.com/fsouza/go-dockerclient"
@@ -48,9 +47,7 @@ func Start() error {
 			return err
 		}
 	}
-	go func() {
-		api.Start()
-	}()
+	shared.List = list
 	for {
 		if !first {
 			time.Sleep(time.Duration(*shared.Interval) * time.Second)
