@@ -28,13 +28,17 @@ func Start() {
 }
 
 func pull(w http.ResponseWriter, r *http.Request, p httpr.Params) {
-	daemon.Pull(p.ByName("serviceName"))
+	s := p.ByName("serviceName")
+	log.Infof("Received pull for %v", s)
+	daemon.Pull(s)
 }
 
 func pullAndPropagate(w http.ResponseWriter, r *http.Request, p httpr.Params) {
+	s := p.ByName("serviceName")
+	log.Infof("Received pull and propagate for %s", s)
 	// @todo this should be more robust, use gossip
 	for _, member := range shared.List.Members() {
-		http.NewRequest("GET", fmt.Sprintf("http://%v:%v/v1/pull/"+p.ByName("serviceName"), member.Addr.String(), member.Port+1), bytes.NewReader([]byte{}))
+		http.NewRequest("GET", fmt.Sprintf("http://%v:%v/v1/pull/"+s, member.Addr.String(), member.Port+1), bytes.NewReader([]byte{}))
 	}
 }
 
