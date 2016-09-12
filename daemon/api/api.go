@@ -1,9 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	log "github.com/cihub/seelog"
+	"github.com/crufter/puller/daemon"
 	"github.com/crufter/puller/shared"
 	"github.com/crufter/puller/types"
 	httpr "github.com/julienschmidt/httprouter"
@@ -18,9 +20,22 @@ func Start() {
 	r.PUT("/v1/services", putServices)
 	r.GET("/v1/services", getServices)
 	r.GET("/v1/services/:name", getService)
+	r.GET("/v1/pull-and-propagate/:serviceName", pullAndPropagate)
+	r.GET("/v1/pull/:serviceName", pull)
 	//r.GET("/v1/members", getMembers)
 	log.Info("Starting http server")
 	log.Critical(http.ListenAndServe(fmt.Sprintf(":%v", *shared.Port+1), r))
+}
+
+func pull(w http.ResponseWriter, r *http.Request, p httpr.Params) {
+	daemon.Pull(p.ByName("serviceName"))
+}
+
+func pullAndPropagate(w http.ResponseWriter, r *http.Request, p httpr.Params) {
+	// @todo this should be more robust, use gossip
+	for _, member := range shared.List.Members() {
+		http.NewRequest("GET", fmt.Sprintf("http://%v:%v/v1/pull/"+p.ByName("serviceName"), member.Addr.String(), member.Port+1), bytes.NewReader([]byte{}))
+	}
 }
 
 func putServices(w http.ResponseWriter, r *http.Request, p httpr.Params) {
