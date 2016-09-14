@@ -20,7 +20,7 @@ func Start() {
 	r.PUT("/v1/services", putServices)
 	r.GET("/v1/services", getServices)
 	r.GET("/v1/services/:name", getService)
-	r.GET("/v1/pull-and-propagate/:serviceName", pullAndPropagate)
+	r.GET("/v1/propagate-and-pull/:serviceName", pullAndPropagate)
 	r.GET("/v1/pull/:serviceName", pull)
 	//r.GET("/v1/members", getMembers)
 	log.Info("Starting http server")
@@ -38,7 +38,20 @@ func pullAndPropagate(w http.ResponseWriter, r *http.Request, p httpr.Params) {
 	log.Infof("Received pull and propagate for %s", s)
 	// @todo this should be more robust, use gossip
 	for _, member := range shared.List.Members() {
-		http.NewRequest("GET", fmt.Sprintf("http://%v:%v/v1/pull/"+s, member.Addr.String(), member.Port+1), bytes.NewReader([]byte{}))
+		req, err := http.NewRequest("GET", fmt.Sprintf("http://%v:%v/v1/pull/"+s, member.Addr.String(), member.Port+1), bytes.NewReader([]byte{}))
+		if err != nil {
+			log.Infof("Failed to build request: %v", err)
+			continue
+		}
+		rsp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			log.Infof("Failed to broadcast pull to node %v: %v", member, err)
+			continue
+		}
+		if rsp.StatusCode != 200 {
+			log.Infof("Response status code is not 200 when broadcasting pull to node %v, response: %v", member, rsp)
+			continue
+		}
 	}
 }
 
