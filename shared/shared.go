@@ -2,6 +2,7 @@ package shared
 
 import (
 	"flag"
+	"github.com/hashicorp/memberlist"
 	cmap "github.com/streamrail/concurrent-map"
 )
 
@@ -19,4 +20,8 @@ var (
 	ChangedServices  = cmap.New() // map[string]bool - service definition has changed.
 	OutdatedServices = cmap.New() // map[string]bool - service was launched with an image that's older than the current one locally
 	BadServiceFiles  = cmap.New() // map[string]bool - bad service files
+)
+
+var (
+	List *memberlist.Memberlist
 )

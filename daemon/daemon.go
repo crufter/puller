@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	log "github.com/cihub/seelog"
-	"github.com/crufter/puller/daemon/api"
 	"github.com/crufter/puller/shared"
 	"github.com/crufter/puller/types"
 	docker "github.com/fsouza/go-dockerclient"
@@ -48,9 +47,7 @@ func Start() error {
 			return err
 		}
 	}
-	go func() {
-		api.Start()
-	}()
+	shared.List = list
 	for {
 		if !first {
 			time.Sleep(time.Duration(*shared.Interval) * time.Second)
@@ -60,7 +57,7 @@ func Start() error {
 			log.Warnf("Failed to load service definitions: %v", err)
 			continue
 		}
-		if err := pull(); err != nil {
+		if err := Pull(); err != nil {
 			log.Warnf("Failed to pull images: %v", err)
 		}
 		if err := remove(list); err != nil {
@@ -149,9 +146,12 @@ func matchesNode(service types.Service) bool {
 	return *shared.Node != "" && regexp.MustCompile(service.Node).Match([]byte(*shared.Node))
 }
 
-func pull() error {
+func Pull(sname ...string) error {
 	for _, s := range shared.Services.Items() {
 		service := s.(types.Service)
+		if len(sname) > 0 && service.Name != sname[0] {
+			continue
+		}
 		if !matchesNode(service) {
 			continue
 		}
