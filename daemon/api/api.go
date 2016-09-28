@@ -22,6 +22,7 @@ func Start() {
 	r.GET("/v1/services/:name", getService)
 	r.GET("/v1/propagate-and-pull/:serviceName", pullAndPropagate)
 	r.GET("/v1/pull/:serviceName", pull)
+	r.GET("/v1/health", health)
 	//r.GET("/v1/members", getMembers)
 	log.Info("Starting http server")
 	log.Critical(http.ListenAndServe(fmt.Sprintf(":%v", *shared.Port+1), r))
@@ -30,7 +31,11 @@ func Start() {
 func pull(w http.ResponseWriter, r *http.Request, p httpr.Params) {
 	s := p.ByName("serviceName")
 	log.Infof("Received pull for %v", s)
-	daemon.Pull(s)
+	daemon.Pull(false, s)
+}
+
+func health(w http.ResponseWriter, r *http.Request, p httpr.Params) {
+	return
 }
 
 func pullAndPropagate(w http.ResponseWriter, r *http.Request, p httpr.Params) {
