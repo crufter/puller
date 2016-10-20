@@ -14,6 +14,7 @@ var (
 	Node      = flag.String("node", "", "Name of the node. If left empty, defaults to os value")
 	Interval  = flag.Int64("interval", 30, "Time to sleep between runs of processing")
 	PullEvery = flag.Int64("pull-every", 1, "Pull on every Xth processing runs. Specify more than 1 if you are using Puller in a push based way and only use periodic pulls as a fallback")
+	ApiKey    = flag.String("apikey", "", "If provided all api endpoints will requires this value sent as an 'authorization' header in the http request")
 )
 
 var (

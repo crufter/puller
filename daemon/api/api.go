@@ -28,6 +28,14 @@ func Start() {
 	log.Critical(http.ListenAndServe(fmt.Sprintf(":%v", *shared.Port+1), r))
 }
 
+func auth(f func(w http.ResponseWriter, r *http.Request, p httpr.Params)) func(w http.ResponseWriter, r *http.Request, p httpr.Params) {
+	return func(w http.ResponseWriter, r *http.Request, p httpr.Params) {
+		if len(*shared.ApiKey) > 0 && *shared.ApiKey != r.Header.Get("authorization") {
+			panic("not authorized")
+		}
+	}
+}
+
 func pull(w http.ResponseWriter, r *http.Request, p httpr.Params) {
 	s := p.ByName("serviceName")
 	log.Infof("Received pull for %v", s)
