@@ -17,11 +17,11 @@ import (
 
 func Start() {
 	r := httpr.New()
-	r.PUT("/v1/services", putServices)
-	r.GET("/v1/services", getServices)
-	r.GET("/v1/services/:name", getService)
-	r.GET("/v1/propagate-and-pull/:serviceName", pullAndPropagate)
-	r.GET("/v1/pull/:serviceName", pull)
+	r.PUT("/v1/services", auth(putServices))
+	r.GET("/v1/services", auth(getServices))
+	r.GET("/v1/services/:name", auth(getService))
+	r.GET("/v1/propagate-and-pull/:serviceName", auth(pullAndPropagate))
+	r.GET("/v1/pull/:serviceName", auth(pull))
 	r.GET("/v1/health", health)
 	//r.GET("/v1/members", getMembers)
 	log.Info("Starting http server")
