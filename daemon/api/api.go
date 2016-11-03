@@ -56,6 +56,7 @@ func pullAndPropagate(w http.ResponseWriter, r *http.Request, p httpr.Params) {
 			log.Infof("Failed to build request: %v", err)
 			continue
 		}
+		req.Header.Add("authorization", *shared.ApiKey)
 		rsp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			log.Infof("Failed to broadcast pull to node %v: %v", member, err)

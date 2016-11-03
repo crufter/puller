@@ -351,6 +351,7 @@ func transferServices(services []types.Service, member *memberlist.Node) error {
 	if err != nil {
 		return err
 	}
+	req.Header.Add("authorization", *shared.ApiKey)
 	rsp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return errors.New(fmt.Sprintf("Failed to broadcast service change to node %v: %v", member, err))
