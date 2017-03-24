@@ -168,7 +168,7 @@ func Pull(triggeredByRun bool, sname ...string) error {
 		args := []string{}
 		if strings.Contains(service.Repo, "gcr.io") {
 			cmd = "gcloud"
-			args = []string{"docker", "pull", service.Repo + ":" + service.Tag}
+			args = []string{"docker", "--", "pull", service.Repo + ":" + service.Tag}
 		} else {
 			cmd = "docker"
 			args = []string{"pull", service.Repo + ":" + service.Tag}
